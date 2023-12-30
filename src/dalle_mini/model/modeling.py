@@ -44,6 +44,7 @@ from transformers.models.bart.modeling_flax_bart import (
     FlaxBartModule,
 )
 from transformers.utils import ModelOutput, logging
+from transformers.generation import GenerationConfig
 
 from .configuration import DalleBartConfig
 from .utils import PretrainedFromWandbMixin
@@ -1721,15 +1722,22 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
             input_ids = (
                 jnp.ones((input_ids.shape[0], 1), dtype="i4") * decoder_start_token_id
             )
-
+        gc = GenerationConfig(
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            min_length=min_length,
+            max_length=max_length,
+            eos_token_id=eos_token_id,
+            forced_bos_token_id=forced_bos_token_id,
+            forced_eos_token_id=forced_eos_token_id,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature
+            )
         if not do_sample and num_beams == 1:
             logits_processor = self._get_logits_processor(
-                no_repeat_ngram_size,
-                min_length,
-                max_length,
-                eos_token_id,
-                forced_bos_token_id,
-                forced_eos_token_id,
+                gc,
+                0,
+                []
             )
             return self._greedy_search(
                 input_ids,
@@ -1742,16 +1750,11 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 model_kwargs=model_kwargs,
             )
         elif do_sample and num_beams == 1:
-            logits_warper = self._get_logits_warper(
-                top_k=top_k, top_p=top_p, temperature=temperature
-            )
+            logits_warper = self._get_logits_warper(gc)
             logits_processor = self._get_logits_processor(
-                no_repeat_ngram_size,
-                min_length,
-                max_length,
-                eos_token_id,
-                forced_bos_token_id,
-                forced_eos_token_id,
+                gc,
+                0,
+                []
             )
             return self._sample(
                 input_ids,
@@ -1785,12 +1788,9 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 )
 
             logits_processor = self._get_logits_processor(
-                no_repeat_ngram_size,
-                min_length,
-                max_length,
-                eos_token_id,
-                forced_bos_token_id,
-                forced_eos_token_id,
+                gc,
+                0,
+                None
             )
 
             return self._beam_search(
